@@ -1,7 +1,7 @@
 <template>
   <div class="mosaic-container">
     <div class="header">
-      <h2>图片马赛克生成器</h2>
+      <h2>马赛克图片生成器</h2>
     </div>
 
     <div class="controls">
@@ -69,7 +69,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, nextTick } from 'vue'
 import { UploadFilled } from '@element-plus/icons-vue'
 
 const resultCanvas = ref(null)
@@ -132,9 +132,10 @@ const handleFileChange = (file) => {
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       originalImage = img;
       isImageLoaded.value = true;
+      await nextTick();
       processImage();
     };
     img.src = e.target.result;
