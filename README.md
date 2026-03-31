@@ -1,5 +1,5 @@
-# Vue 3 + Vite
+# 马赛克图片生成工具
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
-
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+<img width="300" height="300" alt="mosaic-result" src="https://github.com/user-attachments/assets/3bc5b0e5-c076-44a2-96f1-96525133f70c" />
+=>
+<img width="300" height="300" alt="mosaic-result" src="https://github.com/user-attachments/assets/80bef356-937f-436d-8959-f34d3208df38" />
