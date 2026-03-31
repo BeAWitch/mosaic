@@ -23,19 +23,39 @@
         </el-col>
 
         <el-col :span="18" class="sliders">
-          <div class="slider-item">
-            <span class="label">网格大小 (Grid Spacing)</span>
-            <el-slider v-model="params.gridSpacing" :min="10" :max="100" @input="debouncedProcess" />
-          </div>
-          <div class="slider-item">
-            <span class="label">最大边框比例 (Max Border Ratio)</span>
-            <el-slider v-model="params.maxBorderRatio" :min="0" :max="0.5" :step="0.01" @input="debouncedProcess" />
-          </div>
-          <div class="slider-item">
-            <span class="label">边框厚度系数 (Border Multiplier)</span>
-            <el-slider v-model="params.borderMultiplier" :min="0.1" :max="1.0" :step="0.05" @input="debouncedProcess" />
-          </div>
-          <el-button type="primary" @click="downloadImage" :disabled="!isImageLoaded">下载结果图</el-button>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <div class="slider-item">
+                <span class="label">网格大小 (Grid Spacing)</span>
+                <el-slider v-model="params.gridSpacing" :min="10" :max="100" @input="debouncedProcess" />
+              </div>
+              <div class="slider-item">
+                <span class="label">最大边框比例 (Max Border Ratio)</span>
+                <el-slider v-model="params.maxBorderRatio" :min="0" :max="0.5" :step="0.01" @input="debouncedProcess" />
+              </div>
+              <div class="slider-item">
+                <span class="label">边框厚度系数 (Border Multiplier)</span>
+                <el-slider v-model="params.borderMultiplier" :min="0.1" :max="1.0" :step="0.05" @input="debouncedProcess" />
+              </div>
+            </el-col>
+            <el-col :span="12">
+              <div class="slider-item">
+                <span class="label">形状圆角 (Border Radius) %</span>
+                <el-slider v-model="params.borderRadius" :min="0" :max="50" @input="debouncedProcess" />
+              </div>
+              <div class="slider-item">
+                <span class="label">边缘发光 (Glow Blur) px</span>
+                <el-slider v-model="params.glowBlur" :min="0" :max="20" @input="debouncedProcess" />
+              </div>
+              <div class="slider-item">
+                <span class="label">保留原始明度映射 (Keep Original Value)</span>
+                <el-switch v-model="params.keepOriginalValue" @change="debouncedProcess" />
+              </div>
+              <div class="slider-item" style="margin-top: 15px;">
+                <el-button type="primary" @click="downloadImage" :disabled="!isImageLoaded">下载结果图</el-button>
+              </div>
+            </el-col>
+          </el-row>
         </el-col>
       </el-row>
     </div>
@@ -59,7 +79,10 @@ const isProcessing = ref(false)
 const params = reactive({
   gridSpacing: 30,
   maxBorderRatio: 0.4,
-  borderMultiplier: 0.5
+  borderMultiplier: 0.5,
+  borderRadius: 0,
+  glowBlur: 0,
+  keepOriginalValue: false
 })
 
 let originalImage = null
@@ -135,7 +158,6 @@ const processImage = () => {
   }
 
   isProcessing.value = true;
-  // RequestAnimationFrame allows the UI loading state to render before blocking thread
   requestAnimationFrame(() => {
     const canvas = resultCanvas.value;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -145,7 +167,6 @@ const processImage = () => {
     canvas.width = width;
     canvas.height = height;
 
-    // 1. 获取原图数据 (先在离屏canvas获取或直接获取)
     const offscreen = document.createElement('canvas');
     offscreen.width = width;
     offscreen.height = height;
@@ -154,7 +175,7 @@ const processImage = () => {
     const imageData = offCtx.getImageData(0, 0, width, height);
     const data = imageData.data;
 
-    // 2. 清空画布（背景设黑，相当于全部画上黑边）
+    // 清空画布（背景设黑）
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, width, height);
 
@@ -202,14 +223,14 @@ const processImage = () => {
         let meanS = sumS / pixelCount;
         let meanV = sumV / pixelCount; // 0~1
 
-        // 边框逻辑
         let borderRatio = Math.min(params.maxBorderRatio, (1 - meanV) * params.borderMultiplier);
         let borderWidth = Math.max(1, Math.floor(borderRatio * gs));
-
         borderWidth = Math.min(borderWidth, Math.floor(regionH / 2), Math.floor(regionW / 2));
 
-        // 内部颜色绘制 (v = 1 即 100%明度)
-        const rgb = hsvToRgb(meanH, meanS, 1);
+        // 决定绘制色块时的明度 V：如果选择保留原始明度，则使用平均 V，否则拉满到 1
+        const drawV = params.keepOriginalValue ? meanV : 1;
+        const rgb = hsvToRgb(meanH, meanS, drawV);
+        const fillStyle = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
         
         let innerX = startX + borderWidth;
         let innerY = startY + borderWidth;
@@ -217,8 +238,28 @@ const processImage = () => {
         let innerH = regionH - 2 * borderWidth;
 
         if (innerW > 0 && innerH > 0) {
-          ctx.fillStyle = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
-          ctx.fillRect(innerX, innerY, innerW, innerH);
+          ctx.fillStyle = fillStyle;
+          
+          // 发光效果 (Glow)
+          if (params.glowBlur > 0) {
+            ctx.shadowBlur = params.glowBlur;
+            ctx.shadowColor = fillStyle;
+          } else {
+            ctx.shadowBlur = 0;
+          }
+
+          // 圆角处理 (Border Radius)
+          if (params.borderRadius > 0 && ctx.roundRect) {
+            ctx.beginPath();
+            // 计算最大允许的圆角半径，50% 表示完全的胶囊形/圆形
+            const maxRadius = Math.min(innerW, innerH) / 2;
+            const radius = maxRadius * (params.borderRadius / 50);
+            ctx.roundRect(innerX, innerY, innerW, innerH, radius);
+            ctx.fill();
+          } else {
+            // 普通矩形
+            ctx.fillRect(innerX, innerY, innerW, innerH);
+          }
         }
       }
     }
@@ -259,7 +300,7 @@ const downloadImage = () => {
   justify-content: center;
 }
 .slider-item {
-  margin-bottom: 15px;
+  margin-bottom: 10px;
 }
 .slider-item .label {
   display: block;
